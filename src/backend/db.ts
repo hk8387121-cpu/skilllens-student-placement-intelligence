@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import csv from 'csv-parser';
+import initSqlJs from 'sql.js';
 
 export interface StudentRecord {
   student_id: number;
@@ -25,41 +25,46 @@ export interface StudentRecord {
 
 class Database {
   private data: StudentRecord[] = [];
+  private db: any = null;
 
-  async loadData(csvFilePath: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const results: StudentRecord[] = [];
-      fs.createReadStream(csvFilePath)
-        .pipe(csv())
-        .on('data', (data) => {
-          results.push({
-            student_id: parseInt(data.student_id),
-            gender: data.gender,
-            ssc_percentage: parseFloat(data.ssc_percentage),
-            hsc_percentage: parseFloat(data.hsc_percentage),
-            degree_percentage: parseFloat(data.degree_percentage),
-            cgpa: parseFloat(data.cgpa),
-            entrance_exam_score: parseFloat(data.entrance_exam_score),
-            technical_skill_score: parseFloat(data.technical_skill_score),
-            soft_skill_score: parseFloat(data.soft_skill_score),
-            internship_count: parseInt(data.internship_count),
-            live_projects: parseInt(data.live_projects),
-            work_experience_months: parseInt(data.work_experience_months),
-            certifications: parseInt(data.certifications),
-            attendance_percentage: parseFloat(data.attendance_percentage),
-            backlogs: parseInt(data.backlogs),
-            extracurricular_activities: data.extracurricular_activities,
-            placement_status: parseInt(data.placement_status),
-            salary_package_lpa: parseFloat(data.salary_package_lpa),
-          });
-        })
-        .on('end', () => {
-          this.data = results;
-          console.log(`Loaded ${this.data.length} records into Data Warehouse.`);
-          resolve();
-        })
-        .on('error', (err) => reject(err));
-    });
+  async loadData(): Promise<void> {
+    const dbPath = path.join(process.cwd(), 'database', 'skilllens_dw.sqlite');
+    if (!fs.existsSync(dbPath)) {
+      console.warn('Data Warehouse not found. Please run ETL first.');
+      return;
+    }
+
+    const SQL = await initSqlJs();
+    const filebuffer = fs.readFileSync(dbPath);
+    this.db = new SQL.Database(filebuffer);
+
+    // Perform an OLAP-style query joining the star schema to flatten it for ML and UI
+    const query = `
+      SELECT 
+        ds.student_id, ds.gender, ds.extracurricular_activities,
+        da.ssc_percentage, da.hsc_percentage, da.degree_percentage, da.cgpa, da.backlogs,
+        dsk.entrance_exam_score, dsk.technical_skill_score, dsk.soft_skill_score, dsk.certifications, dsk.attendance_percentage,
+        de.internship_count, de.live_projects, de.work_experience_months,
+        fp.placement_status, fp.salary_package_lpa
+      FROM Fact_Placement fp
+      JOIN Dim_Student ds ON fp.student_sk = ds.student_sk
+      JOIN Dim_Academic da ON fp.academic_sk = da.academic_sk
+      JOIN Dim_Skills dsk ON fp.skill_sk = dsk.skill_sk
+      JOIN Dim_Experience de ON fp.experience_sk = de.experience_sk
+    `;
+    
+    const results = this.db.exec(query);
+    if (results.length > 0) {
+      const columns = results[0].columns;
+      this.data = results[0].values.map((row: any[]) => {
+        const obj: any = {};
+        columns.forEach((col: string, idx: number) => {
+          obj[col] = row[idx];
+        });
+        return obj as StudentRecord;
+      });
+      console.log(`Loaded ${this.data.length} records from Data Warehouse (Star Schema).`);
+    }
   }
 
   getAllRecords(): StudentRecord[] {
@@ -67,17 +72,27 @@ class Database {
   }
 
   getKPIs() {
-    const total = this.data.length;
-    if (total === 0) return { total: 0, placed: 0, placementPercentage: 0, avgSalary: 0, maxSalary: 0 };
-    const placed = this.data.filter(r => r.placement_status === 1);
-    const avgSalary = placed.reduce((sum, r) => sum + r.salary_package_lpa, 0) / (placed.length || 1);
-    const maxSalary = Math.max(0, ...placed.map(r => r.salary_package_lpa));
+    // We can either do this via SQL or via the flattened array.
+    // Doing it via SQL to demonstrate DWDM principles.
+    if (!this.db) return { totalStudents: 0, totalPlaced: 0, placementPercentage: 0, avgSalary: 0, highestSalary: 0 };
+    
+    const res = this.db.exec(`
+      SELECT 
+        COUNT(*) as totalStudents,
+        SUM(placement_status) as totalPlaced,
+        (SUM(placement_status) * 100.0 / COUNT(*)) as placementPercentage,
+        AVG(CASE WHEN placement_status = 1 THEN salary_package_lpa ELSE NULL END) as avgSalary,
+        MAX(salary_package_lpa) as highestSalary
+      FROM Fact_Placement
+    `);
+    
+    const row = res[0].values[0];
     return {
-      totalStudents: total,
-      totalPlaced: placed.length,
-      placementPercentage: (placed.length / total) * 100,
-      avgSalary,
-      highestSalary: maxSalary
+      totalStudents: row[0],
+      totalPlaced: row[1],
+      placementPercentage: row[2],
+      avgSalary: row[3] || 0,
+      highestSalary: row[4] || 0
     };
   }
 }

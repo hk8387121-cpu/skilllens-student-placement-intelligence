@@ -10,7 +10,7 @@ async function startServer() {
   const PORT = 3000;
 
   // Initialize DB
-  await db.loadData(path.join(process.cwd(), 'dataset/student_placement.csv'));
+  await db.loadData();
   trainDecisionTree();
 
   // API Routes

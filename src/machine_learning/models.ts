@@ -5,51 +5,96 @@ import { db, StudentRecord } from '../backend/db';
 
 let dtClassifier: any = null;
 
+// Helper to shuffle and split data
+function trainTestSplit(data: any[], testSize = 0.2) {
+  const shuffled = [...data].sort(() => 0.5 - Math.random());
+  const splitIdx = Math.floor(data.length * (1 - testSize));
+  return {
+    train: shuffled.slice(0, splitIdx),
+    test: shuffled.slice(splitIdx)
+  };
+}
+
+
+function calculateFeatureImportance(data: any[]) {
+  // We approximate feature importance using absolute Pearson correlation with placement_status
+  // In a real scikit-learn DT, this would be Gini importance.
+  const features = ['ssc_percentage', 'hsc_percentage', 'degree_percentage', 'cgpa', 'technical_skill_score', 'soft_skill_score', 'internship_count', 'certifications', 'attendance_percentage', 'backlogs'];
+  
+  const y = data.map(r => r.placement_status);
+  const meanY = y.reduce((a, b) => a + b, 0) / y.length;
+  
+  const importances = features.map(feat => {
+    const x = data.map(r => (r as any)[feat]);
+    const meanX = x.reduce((a, b) => a + b, 0) / x.length;
+    
+    let num = 0, denX = 0, denY = 0;
+    for(let i=0; i<data.length; i++) {
+      const dx = x[i] - meanX;
+      const dy = y[i] - meanY;
+      num += dx * dy;
+      denX += dx * dx;
+      denY += dy * dy;
+    }
+    const r = num / Math.sqrt(denX * denY);
+    return { feature: feat, importance: isNaN(r) ? 0 : Math.abs(r) };
+  });
+  
+  const totalImp = importances.reduce((s, f) => s + f.importance, 0);
+  return importances.map(f => ({
+    feature: f.feature.replace(/_/g, ' ').replace(/w/g, l => l.toUpperCase()),
+    importance: (f.importance / totalImp) * 100
+  })).sort((a, b) => b.importance - a.importance);
+}
+
 export function trainDecisionTree() {
   const data = db.getAllRecords();
   if (data.length === 0) return null;
   
+  // Create Train / Test split
+  const { train, test } = trainTestSplit(data, 0.2);
+
   // Features: ssc, hsc, degree, cgpa, tech, soft, intern, cert, att, backlogs
-  const X = data.map(r => [
-    r.ssc_percentage,
-    r.hsc_percentage,
-    r.degree_percentage,
-    r.cgpa,
-    r.technical_skill_score,
-    r.soft_skill_score,
-    r.internship_count,
-    r.certifications,
-    r.attendance_percentage,
-    r.backlogs
-  ]);
-  const y = data.map(r => r.placement_status);
+  const getFeatures = (r: StudentRecord) => [
+    r.ssc_percentage, r.hsc_percentage, r.degree_percentage, r.cgpa,
+    r.technical_skill_score, r.soft_skill_score, r.internship_count,
+    r.certifications, r.attendance_percentage, r.backlogs
+  ];
+
+  const X_train = train.map(getFeatures);
+  const y_train = train.map(r => r.placement_status);
+  
+  const X_test = test.map(getFeatures);
+  const y_test = test.map(r => r.placement_status);
 
   dtClassifier = new DecisionTreeClassifier();
-  dtClassifier.train(X, y);
+  dtClassifier.train(X_train, y_train);
   
-  // Predict on same data for simplicity to get accuracy/confusion matrix
-  const predictions = dtClassifier.predict(X);
+  // Evaluate on Test set
+  const predictions = dtClassifier.predict(X_test);
   let correct = 0;
   let tp=0, fp=0, tn=0, fn=0;
-  for(let i=0; i<y.length; i++) {
-    if(predictions[i] === y[i]) correct++;
-    if(predictions[i]===1 && y[i]===1) tp++;
-    if(predictions[i]===1 && y[i]===0) fp++;
-    if(predictions[i]===0 && y[i]===0) tn++;
-    if(predictions[i]===0 && y[i]===1) fn++;
+  
+  for(let i=0; i<y_test.length; i++) {
+    if(predictions[i] === y_test[i]) correct++;
+    if(predictions[i]===1 && y_test[i]===1) tp++;
+    if(predictions[i]===1 && y_test[i]===0) fp++;
+    if(predictions[i]===0 && y_test[i]===0) tn++;
+    if(predictions[i]===0 && y_test[i]===1) fn++;
   }
   
-  const accuracy = correct / y.length;
+  const accuracy = correct / y_test.length;
   const precision = tp / (tp + fp) || 0;
   const recall = tp / (tp + fn) || 0;
   const f1 = 2 * (precision * recall) / (precision + recall) || 0;
-
+  
   return {
     accuracy,
     precision,
     recall,
     f1,
-    confusionMatrix: [[tn, fp], [fn, tp]]
+    confusionMatrix: [[tn, fp], [fn, tp]],
+    featureImportance: calculateFeatureImportance(train)
   };
 }
 
@@ -66,7 +111,6 @@ export function predictPlacement(features: number[]) {
   const cert = features[7];
   const backlogs = features[9];
   
-  // User specifically requested these exact boundaries
   if (cgpa < 6.0 || intern === 0) {
     return 0;
   }
@@ -91,7 +135,7 @@ export function runKMeans() {
   // 3 clusters
   const result = kmeans(X, 3, { initialization: 'kmeans++' });
   
-  // Map clusters to High, Medium, Low potential based on centroids avg
+  // Map clusters
   const centroids = result.centroids.map((c: any, i: number) => ({ index: i, score: c[0] + c[1]/10 + c[2]/10 }));
   centroids.sort((a, b) => b.score - a.score);
   
@@ -129,12 +173,10 @@ export async function runApriori(): Promise<any[]> {
     return t;
   });
 
-  // Apriori requires itemsets
   return new Promise((resolve) => {
     const apriori = new Apriori(0.1); // 10% support
     const rules: any[] = [];
     apriori.on('data', (itemset: any) => {
-        // We only care about frequent itemsets containing Placement_Yes
         if(itemset.items.includes('Placement_Yes') && itemset.items.length > 1) {
             rules.push({
                 items: itemset.items,
