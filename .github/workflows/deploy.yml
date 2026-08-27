@@ -20,20 +20,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: 24
+
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
+
       - name: Build frontend
         env:
           VITE_API_URL: https://skilllens-student-placement-intelligence.onrender.com
           GITHUB_PAGES: true
         run: npx vite build
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
