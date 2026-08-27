@@ -3,20 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="refresh" content="0; url=/skilllens-student-placement-intelligence/" />
     <script>
-      // Preserve the client-side route so React Router can render it after GitHub Pages fallback.
-      const base = '/skilllens-student-placement-intelligence/';
-      const route = window.location.pathname.startsWith(base)
-        ? window.location.pathname.slice(base.length)
-        : '';
-      const query = window.location.search || '';
-      const hash = window.location.hash || '';
-      window.location.replace(base + (route ? '?route=' + encodeURIComponent(route) : '') + query + hash);
+      // GitHub Pages fallback for the React Router SPA.
+      sessionStorage.redirect = window.location.href;
+      window.location.replace('/skilllens-student-placement-intelligence/');
     </script>
     <title>SkillLens</title>
   </head>
-  <body>
-    Loading SkillLens...
-  </body>
+  <body>Loading SkillLens...</body>
 </html>
