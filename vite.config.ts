@@ -5,9 +5,9 @@ import { defineConfig } from 'vite';
 
 export default defineConfig(() => {
   return {
-    // GitHub Pages serves this project from /skilllens-student-placement-intelligence/
-    // while local development continues to use '/'.
-    base: process.env.NODE_ENV === 'production'
+    // GitHub Pages serves this project from /skilllens-student-placement-intelligence/.
+    // Render serves the same frontend from the domain root, so its base must be '/'.
+    base: process.env.GITHUB_PAGES === 'true'
       ? '/skilllens-student-placement-intelligence/'
       : '/',
     plugins: [react(), tailwindcss()],
@@ -17,9 +17,7 @@ export default defineConfig(() => {
       },
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
       hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
   };
