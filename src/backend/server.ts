@@ -1,8 +1,13 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { db } from './db';
 import { trainDecisionTree, runKMeans, runApriori, predictPlacement } from '../machine_learning/models';
 import { createServer as createViteServer } from 'vite';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
@@ -64,14 +69,22 @@ async function startServer() {
   });
   app.get('/api/ml/kmeans', (req, res) => res.json(runKMeans()));
   app.get('/api/ml/apriori', async (req, res) => res.json(await runApriori()));
-  if (process.env.NODE_ENV !== 'production') {
+
+  const distPath = path.resolve(__dirname, 'index.html');
+  const sourceDistPath = path.resolve(process.cwd(), 'dist');
+  const indexPath = fs.existsSync(distPath) ? distPath : path.join(sourceDistPath, 'index.html');
+
+  if (process.env.NODE_ENV !== 'production' && !fs.existsSync(indexPath)) {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => res.sendFile(path.join(distPath, 'index.html')));
+    app.use(express.static(path.dirname(indexPath)));
+    app.get('*', (req, res) => {
+      if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
+      return res.status(503).send('Frontend build is missing. Please redeploy the service.');
+    });
   }
+
   app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
 }
 startServer().catch(error => { console.error('Failed to start server:', error); process.exit(1); });
