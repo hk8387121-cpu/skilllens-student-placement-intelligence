@@ -30,6 +30,7 @@ jobs:
       - name: Build frontend
         env:
           VITE_API_URL: https://skilllens-student-placement-intelligence.onrender.com
+          GITHUB_PAGES: true
         run: npx vite build
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
