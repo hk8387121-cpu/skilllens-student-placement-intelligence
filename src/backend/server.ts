@@ -1,13 +1,7 @@
 import express from 'express';
-import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
 import { db } from './db';
 import { trainDecisionTree, runKMeans, runApriori, predictPlacement } from '../machine_learning/models';
 import { createServer as createViteServer } from 'vite';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
@@ -20,9 +14,17 @@ async function startServer() {
   });
   app.use(express.json());
   const PORT = Number(process.env.PORT) || 3000;
+
   await db.loadData();
   trainDecisionTree();
 
+  // Render hosts the API only. The React/Vite frontend is deployed separately on GitHub Pages.
+  app.get('/', (req, res) => res.json({
+    status: 'ok',
+    service: 'SkillLens Student Placement Intelligence API',
+    records: db.getAllRecords().length,
+    frontend: 'https://hk8387121-cpu.github.io/skilllens-student-placement-intelligence/'
+  }));
   app.get('/api/health', (req, res) => res.json({ status: 'ok', service: 'Student Placement Intelligence System', records: db.getAllRecords().length }));
   app.get('/api/dashboard/kpis', (req, res) => res.json(db.getKPIs()));
   app.get('/api/dashboard/charts', (req, res) => {
@@ -70,21 +72,12 @@ async function startServer() {
   app.get('/api/ml/kmeans', (req, res) => res.json(runKMeans()));
   app.get('/api/ml/apriori', async (req, res) => res.json(await runApriori()));
 
-  const distPath = path.resolve(__dirname, 'index.html');
-  const sourceDistPath = path.resolve(process.cwd(), 'dist');
-  const indexPath = fs.existsSync(distPath) ? distPath : path.join(sourceDistPath, 'index.html');
-
-  if (process.env.NODE_ENV !== 'production' && !fs.existsSync(indexPath)) {
+  if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
     app.use(vite.middlewares);
-  } else {
-    app.use(express.static(path.dirname(indexPath)));
-    app.get('*', (req, res) => {
-      if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
-      return res.status(503).send('Frontend build is missing. Please redeploy the service.');
-    });
   }
 
   app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
 }
+
 startServer().catch(error => { console.error('Failed to start server:', error); process.exit(1); });
