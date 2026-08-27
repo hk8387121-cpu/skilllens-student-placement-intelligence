@@ -10,7 +10,7 @@ export default function StudentRecords() {
   const recordsPerPage = 100;
 
   useEffect(() => {
-    fetch('/api/students').then(r => r.json()).then(setRecords);
+    fetch((import.meta.env.VITE_API_URL || '') + '/api/students').then(r => r.json()).then(setRecords);
   }, []);
 
   const filtered = records.filter(r => {

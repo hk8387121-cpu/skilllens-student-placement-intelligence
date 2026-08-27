@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, BrainCircuit, Network, Link as LinkIcon, FileText, Info, Menu } from 'lucide-react';
 import Dashboard from './frontend/pages/Dashboard';
 import StudentRecords from './frontend/pages/StudentRecords';

@@ -6,7 +6,7 @@ export default function Association() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/ml/apriori').then(r => r.json()).then(data => {
+    fetch((import.meta.env.VITE_API_URL || '') + '/api/ml/apriori').then(r => r.json()).then(data => {
       setRules(data);
       setLoading(false);
     });

@@ -12,7 +12,7 @@ export default function Prediction() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetch('/api/ml/decision-tree').then(r => r.json()).then(setMetrics);
+    fetch((import.meta.env.VITE_API_URL || '') + '/api/ml/decision-tree').then(r => r.json()).then(setMetrics);
   }, []);
 
   const handlePredict = async (e: React.FormEvent) => {
@@ -21,7 +21,7 @@ export default function Prediction() {
     const features = [form.ssc, form.hsc, form.degree, form.cgpa, form.tech, form.soft, form.intern, form.cert, form.attendance, form.backlogs];
     
     try {
-      const res = await fetch('/api/ml/predict', {
+      const res = await fetch((import.meta.env.VITE_API_URL || '') + '/api/ml/predict', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ features })

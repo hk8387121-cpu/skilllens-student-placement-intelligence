@@ -9,7 +9,7 @@ export default function Clustering() {
   const [data, setData] = useState<any>(null);
 
   useEffect(() => {
-    fetch('/api/ml/kmeans').then(r => r.json()).then(setData);
+    fetch((import.meta.env.VITE_API_URL || '') + '/api/ml/kmeans').then(r => r.json()).then(setData);
   }, []);
 
   if (!data) return <div className="p-8 text-white">Running K-Means Clustering...</div>;

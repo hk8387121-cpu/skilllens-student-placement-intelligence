@@ -14,7 +14,7 @@ export default function Dashboard() {
   const [statusFilter, setStatusFilter] = useState('All Status');
 
   useEffect(() => {
-    fetch('/api/students').then(r => r.json()).then(setAllData);
+    fetch((import.meta.env.VITE_API_URL || '') + '/api/students').then(r => r.json()).then(setAllData);
   }, []);
 
   const filteredData = useMemo(() => {
