@@ -15,7 +15,6 @@ function trainTestSplit(data: any[], testSize = 0.2) {
   };
 }
 
-
 function calculateFeatureImportance(data: any[]) {
   // We approximate feature importance using absolute Pearson correlation with placement_status
   // In a real scikit-learn DT, this would be Gini importance.
@@ -42,7 +41,7 @@ function calculateFeatureImportance(data: any[]) {
   
   const totalImp = importances.reduce((s, f) => s + f.importance, 0);
   return importances.map(f => ({
-    feature: f.feature.replace(/_/g, ' ').replace(/w/g, l => l.toUpperCase()),
+    feature: f.feature.replace(/_/g, ' ').replace(/\bw/g, l => l.toUpperCase()),
     importance: (f.importance / totalImp) * 100
   })).sort((a, b) => b.importance - a.importance);
 }
@@ -164,7 +163,7 @@ export async function runApriori(): Promise<any[]> {
   if (data.length === 0) return [];
   
   const transactions = data.map(r => {
-    const t = [];
+    const t: string[] = [];
     if (r.cgpa >= 8) t.push('High_CGPA');
     if (r.internship_count > 0) t.push('Has_Internship');
     if (r.certifications > 0) t.push('Has_Certifications');
@@ -174,19 +173,24 @@ export async function runApriori(): Promise<any[]> {
   });
 
   return new Promise((resolve) => {
-    const apriori = new Apriori(0.1); // 10% support
+    const apriori = new Apriori(0.1); // 10% minimum support
     const rules: any[] = [];
     apriori.on('data', (itemset: any) => {
-        if(itemset.items.includes('Placement_Yes') && itemset.items.length > 1) {
-            rules.push({
-                items: itemset.items,
-                support: itemset.support
-            });
-        }
+      if (itemset.items.includes('Placement_Yes') && itemset.items.length > 1) {
+        // node-apriori returns the matched transaction count in this version,
+        // while the UI expects support as a fraction between 0 and 1.
+        // Normalize defensively so the API always returns a valid support value.
+        const rawSupport = Number(itemset.support);
+        const support = rawSupport > 1 ? rawSupport / data.length : rawSupport;
+        rules.push({
+          items: itemset.items,
+          support: Math.max(0, Math.min(1, support))
+        });
+      }
     });
     apriori.exec(transactions).then(() => {
-        rules.sort((a, b) => b.support - a.support);
-        resolve(rules.slice(0, 10)); // return top 10 rules
+      rules.sort((a, b) => b.support - a.support);
+      resolve(rules.slice(0, 10)); // return top 10 rules
     });
   });
 }
