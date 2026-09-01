@@ -1,15 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { Link as LinkIcon } from 'lucide-react';
 
+const TOTAL_TRANSACTIONS = 5000;
+
 export default function Association() {
   const [rules, setRules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch((import.meta.env.VITE_API_URL || '') + '/api/ml/apriori').then(r => r.json()).then(data => {
-      setRules(data);
-      setLoading(false);
-    });
+    fetch((import.meta.env.VITE_API_URL || '') + '/api/ml/apriori')
+      .then(r => r.json())
+      .then(data => {
+        setRules(Array.isArray(data) ? data : []);
+        setLoading(false);
+      })
+      .catch(() => {
+        setRules([]);
+        setLoading(false);
+      });
   }, []);
 
   if (loading) return <div className="p-8 text-white">Mining Frequent Itemsets using Apriori...</div>;
@@ -38,21 +46,25 @@ export default function Association() {
           <tbody className="divide-y divide-gray-700">
             {rules.map((rule, idx) => {
               const items = rule.items.filter((i: string) => i !== 'Placement_Yes');
+              const rawSupport = Number(rule.support) || 0;
+              const support = rawSupport > 1 ? rawSupport / TOTAL_TRANSACTIONS : rawSupport;
+              const percentage = Math.max(0, Math.min(100, support * 100));
+
               return (
                 <tr key={idx} className="hover:bg-gray-750 transition-colors">
                   <td className="px-6 py-4 font-medium text-white flex items-center gap-3">
                     <div className="flex flex-wrap gap-2">
                       {items.map((item: string) => (
-                        <span key={item} className="px-2 py-1 bg-gray-700 rounded text-xs">{item.replace('_', ' ')}</span>
+                        <span key={item} className="px-2 py-1 bg-gray-700 rounded text-xs">{item.replace(/_/g, ' ')}</span>
                       ))}
                     </div>
                     <span className="text-gray-500">→</span>
                     <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs font-bold">Placed</span>
                   </td>
-                  <td className="px-6 py-4">{(rule.support * 100).toFixed(1)}%</td>
+                  <td className="px-6 py-4">{percentage.toFixed(1)}%</td>
                   <td className="px-6 py-4">
                     <div className="w-full bg-gray-700 rounded-full h-2">
-                      <div className="bg-pink-500 h-2 rounded-full" style={{ width: `${rule.support * 100}%` }}></div>
+                      <div className="bg-pink-500 h-2 rounded-full" style={{ width: `${percentage}%` }}></div>
                     </div>
                   </td>
                 </tr>
